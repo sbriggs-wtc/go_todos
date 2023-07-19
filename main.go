@@ -6,23 +6,32 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+
 	_ "github.com/lib/pq"
 )
 
-const createTodosTableSQL = `
-CREATE TABLE IF NOT EXISTS todos (
-    id SERIAL PRIMARY KEY,
-    title TEXT NOT NULL,
-    description TEXT,
-    completed BOOLEAN DEFAULT false
-)
-`
-
-func runMigration(db *sql.DB) error {
-	_, err := db.Exec(createTodosTableSQL)
-	if err != nil {
-		return fmt.Errorf("failed to run migration: %w", err)
+func runMigrations(db *sql.DB) error {
+	migrations := []string{
+		`
+		CREATE TABLE IF NOT EXISTS todos (
+			id SERIAL PRIMARY KEY,
+			title TEXT NOT NULL,
+			description TEXT,
+			completed BOOLEAN DEFAULT false
+		)
+		`,
+		`
+		ALTER TABLE todos DROP COLUMN title
+		`,
 	}
+
+	for _, migration := range migrations {
+		_, err := db.Exec(migration)
+		if err != nil {
+			return fmt.Errorf("failed to run migration: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -34,7 +43,7 @@ func setupHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer db.Close()
 
-	err = runMigration(db)
+	err = runMigrations(db)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to run migration: %s", err), http.StatusInternalServerError)
 		return
@@ -48,15 +57,13 @@ func helloHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func insertHandler(w http.ResponseWriter, r *http.Request) {
-
-	// Parse form values (assuming you are submitting form data for title, description, and completed)
+	// Parse the form data (assumes application/x-www-form-urlencoded or application/json)
 	err := r.ParseForm()
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to parse form: %s", err), http.StatusInternalServerError)
 		return
 	}
 
-	title := r.FormValue("title")
 	description := r.FormValue("description")
 	completed := r.FormValue("completed") == "true" // Assuming the value is submitted as "true" or "false"
 
@@ -67,7 +74,7 @@ func insertHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer db.Close()
 
-	stmt, err := db.Prepare("INSERT INTO todos (title, description, completed) VALUES ($1, $2, $3) RETURNING id")
+	stmt, err := db.Prepare("INSERT INTO todos (description, completed) VALUES ($1, $2) RETURNING id")
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to prepare statement: %s", err), http.StatusInternalServerError)
 		return
@@ -75,7 +82,7 @@ func insertHandler(w http.ResponseWriter, r *http.Request) {
 	defer stmt.Close()
 
 	var id int64
-	err = stmt.QueryRow(title, description, completed).Scan(&id)
+	err = stmt.QueryRow(description, completed).Scan(&id)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to insert record: %s", err), http.StatusInternalServerError)
 		return
@@ -86,7 +93,6 @@ func insertHandler(w http.ResponseWriter, r *http.Request) {
 
 type Todo struct {
 	ID          int    `json:"id"`
-	Title       string `json:"title"`
 	Description string `json:"description"`
 	Completed   bool   `json:"completed"`
 }
@@ -99,7 +105,7 @@ func selectAllHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer db.Close()
 
-	rows, err := db.Query("SELECT id, title, description, completed FROM todos")
+	rows, err := db.Query("SELECT id, description, completed FROM todos")
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to execute query: %s", err), http.StatusInternalServerError)
 		return
@@ -110,7 +116,7 @@ func selectAllHandler(w http.ResponseWriter, r *http.Request) {
 
 	for rows.Next() {
 		var todo Todo
-		err := rows.Scan(&todo.ID, &todo.Title, &todo.Description, &todo.Completed)
+		err := rows.Scan(&todo.ID, &todo.Description, &todo.Completed)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("failed to scan row: %s", err), http.StatusInternalServerError)
 			return
@@ -128,7 +134,7 @@ func selectAllHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func updateHandler(w http.ResponseWriter, r *http.Request) {
-	// Parse form values (assuming you are submitting form data for title, description, and completed)
+	// Parse the form data (assumes application/x-www-form-urlencoded or application/json)
 	err := r.ParseForm()
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to parse form: %s", err), http.StatusInternalServerError)
@@ -136,7 +142,6 @@ func updateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := r.FormValue("id")
-	title := r.FormValue("title")
 	description := r.FormValue("description")
 	completed := r.FormValue("completed") == "true" // Assuming the value is submitted as "true" or "false"
 
@@ -147,14 +152,14 @@ func updateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer db.Close()
 
-	stmt, err := db.Prepare("UPDATE todos SET title = $2, description = $3, completed = $4 WHERE id = $1")
+	stmt, err := db.Prepare("UPDATE todos SET description = $2, completed = $3 WHERE id = $1")
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to prepare statement: %s", err), http.StatusInternalServerError)
 		return
 	}
 	defer stmt.Close()
 
-	_, err = stmt.Exec(id, title, description, completed)
+	_, err = stmt.Exec(id, description, completed)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to update record: %s", err), http.StatusInternalServerError)
 		return
@@ -164,7 +169,7 @@ func updateHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func deleteHandler(w http.ResponseWriter, r *http.Request) {
-	// Parse form values (assuming you are submitting form data for the ID of the record to delete)
+	// Parse the form data (assumes application/x-www-form-urlencoded or application/json)
 	err := r.ParseForm()
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to parse form: %s", err), http.StatusInternalServerError)
@@ -209,8 +214,8 @@ func main() {
 	http.HandleFunc("/insert", corsMiddleware(insertHandler))
 	http.HandleFunc("/select-all", corsMiddleware(selectAllHandler))
 	http.HandleFunc("/update", corsMiddleware(updateHandler))
-	http.HandleFunc("/delete", deleteHandler)   
-	
+	http.HandleFunc("/delete", corsMiddleware(deleteHandler))
+
 	log.Println("Server started on :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
