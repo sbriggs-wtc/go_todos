@@ -201,9 +201,88 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, "Deleted record successfully!")
 }
 
+func bulkDeleteHandler(w http.ResponseWriter, r *http.Request) {
+    // Parse the request body as JSON
+    var request struct {
+        Ids []int `json:"ids"`
+    }
+    if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+        fmt.Println("Error decoding JSON:", err)
+        http.Error(w, fmt.Sprintf("failed to parse request body: %s", err), http.StatusBadRequest)
+        return
+    }
+
+    // Print the request body for debugging purposes
+    fmt.Println("Request Body:", r.Body)
+
+
+    db, err := sql.Open("postgres", "postgres://postgres:postgres@db:5432/mydb?sslmode=disable")
+    if err != nil {
+        http.Error(w, fmt.Sprintf("failed to connect to the database: %s", err), http.StatusInternalServerError)
+        return
+    }
+    defer db.Close()
+
+    tx, err := db.Begin()
+    if err != nil {
+        http.Error(w, fmt.Sprintf("failed to start transaction: %s", err), http.StatusInternalServerError)
+        return
+    }
+    defer tx.Rollback() // Rollback the transaction if it is not committed
+
+    stmt, err := tx.Prepare("DELETE FROM todos WHERE id = $1")
+    if err != nil {
+        http.Error(w, fmt.Sprintf("failed to prepare statement: %s", err), http.StatusInternalServerError)
+        return
+    }
+    defer stmt.Close()
+
+    var deletedIds []int
+    for _, id := range request.Ids {
+        _, err = stmt.Exec(id)
+        if err != nil {
+            http.Error(w, fmt.Sprintf("failed to delete record with ID %d: %s", id, err), http.StatusInternalServerError)
+            return
+        }
+        deletedIds = append(deletedIds, id)
+    }
+
+    // Commit the transaction
+    if err := tx.Commit(); err != nil {
+        http.Error(w, fmt.Sprintf("failed to commit transaction: %s", err), http.StatusInternalServerError)
+        return
+    }
+
+    // Respond with the list of deleted IDs
+    response := struct {
+        Success    bool  `json:"success"`
+        Message    string `json:"message"`
+        DeletedIds []int  `json:"deletedIds"`
+    }{
+        Success:    true,
+        Message:    "Todos deleted successfully.",
+        DeletedIds: deletedIds,
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    if err := json.NewEncoder(w).Encode(response); err != nil {
+        http.Error(w, fmt.Sprintf("failed to encode response as JSON: %s", err), http.StatusInternalServerError)
+        return
+    }
+}
+
+
 func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type") // Allow Content-Type header
+
+		// Handle OPTIONS request
+		if r.Method == http.MethodOptions {
+			return
+		}
+
 		next(w, r)
 	}
 }
@@ -215,6 +294,8 @@ func main() {
 	http.HandleFunc("/select-all", corsMiddleware(selectAllHandler))
 	http.HandleFunc("/update", corsMiddleware(updateHandler))
 	http.HandleFunc("/delete", corsMiddleware(deleteHandler))
+	http.HandleFunc("/bulk-delete", corsMiddleware(bulkDeleteHandler))
+
 
 	log.Println("Server started on :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))

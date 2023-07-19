@@ -2,66 +2,175 @@
 <html>
   <head>
     <title>Todo App</title>
+    <style>
+      body {
+        background-color: #d2b48c;
+      }
+
+      table {
+        border-collapse: collapse;
+      }
+
+      th,
+      td,
+      table {
+        border: 1px solid #000;
+      }
+    </style>
   </head>
+
   <body>
     <h1>Todo App</h1>
-    <form id="todoForm">
-      <label for="title">Title:</label>
-      <input type="text" id="title" name="title" required /><br />
-      <label for="description">Description:</label>
-      <textarea id="description" name="description"></textarea><br />
-      <label for="completed">Completed:</label>
-      <input type="checkbox" id="completed" name="completed" /><br />
-      <button type="submit">Add Todo</button>
-    </form>
+
+    <div id="message"></div>
+    <!-- New div to display messages -->
 
     <h2>Todos List</h2>
+    <button onclick="markSelectedAsCompleted()">
+      Mark Selected as Completed
+    </button>
+    <button onclick="deleteSelected()">Delete Selected</button>
     <table id="todosTable">
-      <tr>
-        <th>ID</th>
-        <th>Title</th>
-        <th>Description</th>
-        <th>Completed</th>
-      </tr>
+      <!-- Table Header -->
+      <thead>
+        <tr>
+          <th></th>
+          <th>Description</th>
+          <th>Completed</th>
+          <th></th>
+        </tr>
+      </thead>
+      <!-- Table Body -->
+      <thead>
+        <!-- Inputs row -->
+        <tr>
+          <td></td>
+          <td>
+            <textarea id="description" name="description"></textarea>
+          </td>
+          <td>
+            <input type="checkbox" id="completed" name="completed" />
+          </td>
+          <td>
+            <button type="button" onclick="addTodo()">Add Todo</button>
+          </td>
+        </tr>
+      </thead>
+      <tbody id="todosBody"></tbody>
     </table>
 
     <script>
+      function getSelectedTodoIds() {
+        const checkboxes = document.getElementsByClassName("todoCheckbox");
+        const selectedIds = [];
+        for (let i = 0; i < checkboxes.length; i++) {
+          if (checkboxes[i].checked) {
+            selectedIds.push(checkboxes[i].getAttribute("data-id"));
+          }
+        }
+        return selectedIds;
+      }
+
+      async function markSelectedAsCompleted() {
+        const selectedIds = getSelectedTodoIds();
+        if (selectedIds.length === 0) {
+          alert("Please select at least one todo to mark as completed.");
+          return;
+        }
+
+        try {
+          // Implement the logic to update the completed status of selected todos on the server-side
+          // You can use fetch with the appropriate endpoint to update the todos
+          // For example:
+          // const response = await fetch("http://localhost:8080/bulk-update", {
+          //   method: "POST",
+          //   headers: {
+          //     "Content-Type": "application/json",
+          //   },
+          //   body: JSON.stringify({ ids: selectedIds, completed: true }),
+          // });
+          // const result = await response.json();
+          // console.log(result);
+
+          // After updating on the server-side, refresh the todo list
+          fetchTodos();
+        } catch (error) {
+          console.error("Failed to mark todos as completed: " + error);
+        }
+      }
+
+      async function deleteSelected() {
+        const selectedIds = getSelectedTodoIds();
+
+        console.log(selectedIds, "adsfg");
+        if (selectedIds.length === 0) {
+          alert("Please select at least one todo to delete.");
+          return;
+        }
+
+        // Convert selectedIds to integers
+        const integerIds = selectedIds.map((id) => parseInt(id, 10));
+
+        try {
+          const response = await fetch("http://localhost:8080/bulk-delete", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ ids: integerIds }), // Send the integerIds array in the JSON body
+          });
+
+          if (!response.ok) {
+            throw new Error("Failed to delete todos");
+          }
+
+          const result = await response.json();
+          console.log(result);
+
+          // Display a success message
+          document.getElementById(
+            "message"
+          ).innerText = `Deleted ${result.deletedIds.length} todos successfully.`;
+
+          // After deleting on the server-side, refresh the todo list
+          fetchTodos();
+        } catch (error) {
+          console.error("Failed to delete todos: " + error);
+        }
+      }
+
       async function fetchTodos() {
         try {
           const response = await fetch("http://localhost:8080/select-all");
           const todos = await response.json();
 
-          const table = document.getElementById("todosTable");
-          table.innerHTML = `
-            <tr>
-              <th>ID</th>
-              <th>Title</th>
-              <th>Description</th>
-              <th>Completed</th>
-            </tr>
+          const table = document.getElementById("todosBody");
+
+          // Clear existing table rows
+          table.innerHTML = "";
+
+          todos.reverse().forEach((todo) => {
+            const row = table.insertRow(0);
+            row.innerHTML = `
+              <td><input type="checkbox" class="todoCheckbox" data-id="${
+                todo.id
+              }" /></td>
+              <td>${todo.description}</td>
+            <td>${todo.completed ? "Yes" : "No"}</td>
+            <td>
+              <button onclick="updateTodo(${todo.id})">Edit</button>
+              <button onclick="deleteTodo(${todo.id})">Delete</button>
+            </td>
           `;
-          todos.forEach((todo) => {
-            table.innerHTML += `
-              <tr>
-                <td>${todo.id}</td>
-                <td>${todo.title}</td>
-                <td>${todo.description}</td>
-                <td>${todo.completed ? "Yes" : "No"}</td>
-              </tr>
-            `;
           });
         } catch (error) {
           console.error("Failed to fetch todos: " + error);
         }
       }
 
-      async function handleFormSubmit(event) {
-        event.preventDefault();
-
-        const formData = new FormData(event.target);
-        const title = formData.get("title");
-        const description = formData.get("description");
-        const completed = formData.get("completed") === "on";
+      async function addTodo() {
+        const description = document.getElementById("description").value;
+        const completed = document.getElementById("completed").checked;
 
         try {
           const response = await fetch("http://localhost:8080/insert", {
@@ -69,23 +178,27 @@
             headers: {
               "Content-Type": "application/x-www-form-urlencoded",
             },
-            body: `title=${encodeURIComponent(
-              title
-            )}&description=${encodeURIComponent(
+            body: `description=${encodeURIComponent(
               description
             )}&completed=${completed}`,
           });
           const message = await response.text();
-          alert(message);
+          document.getElementById("message").innerText = message;
           fetchTodos(); // Fetch and display todos after adding a new one
         } catch (error) {
-          alert("Failed to add todo: " + error);
+          console.error("Failed to add todo: " + error);
         }
       }
 
-      document
-        .getElementById("todoForm")
-        .addEventListener("submit", handleFormSubmit);
+      async function updateTodo(id) {
+        // Implement the update functionality here
+        console.log("Update todo with ID:", id);
+      }
+
+      async function deleteTodo(id) {
+        // Implement the delete functionality here
+        console.log("Delete todo with ID:", id);
+      }
 
       // Call fetchTodos initially to display existing todos
       fetchTodos();
