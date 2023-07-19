@@ -26,9 +26,6 @@
     <!-- New div to display messages -->
 
     <h2>Todos List</h2>
-    <button onclick="markSelectedAsCompleted()">
-      Mark Selected as Completed
-    </button>
     <button onclick="deleteSelected()">Delete Selected</button>
     <table id="todosTable">
       <!-- Table Header -->
@@ -71,38 +68,9 @@
         return selectedIds;
       }
 
-      async function markSelectedAsCompleted() {
-        const selectedIds = getSelectedTodoIds();
-        if (selectedIds.length === 0) {
-          alert("Please select at least one todo to mark as completed.");
-          return;
-        }
-
-        try {
-          // Implement the logic to update the completed status of selected todos on the server-side
-          // You can use fetch with the appropriate endpoint to update the todos
-          // For example:
-          // const response = await fetch("http://localhost:8080/bulk-update", {
-          //   method: "POST",
-          //   headers: {
-          //     "Content-Type": "application/json",
-          //   },
-          //   body: JSON.stringify({ ids: selectedIds, completed: true }),
-          // });
-          // const result = await response.json();
-          // console.log(result);
-
-          // After updating on the server-side, refresh the todo list
-          fetchTodos();
-        } catch (error) {
-          console.error("Failed to mark todos as completed: " + error);
-        }
-      }
-
       async function deleteSelected() {
         const selectedIds = getSelectedTodoIds();
 
-        console.log(selectedIds, "adsfg");
         if (selectedIds.length === 0) {
           alert("Please select at least one todo to delete.");
           return;
@@ -155,13 +123,17 @@
               <td><input type="checkbox" class="todoCheckbox" data-id="${
                 todo.id
               }" /></td>
-              <td>${todo.description}</td>
-            <td>${todo.completed ? "Yes" : "No"}</td>
-            <td>
-              <button onclick="updateTodo(${todo.id})">Edit</button>
-              <button onclick="deleteTodo(${todo.id})">Delete</button>
-            </td>
-          `;
+              <td><input type="text" value="${
+                todo.description
+              }" readonly /></td>
+              <td><input type="checkbox" ${
+                todo.completed ? "checked" : ""
+              } disabled /></td>
+              <td>
+                <button onclick="updateTodo(${todo.id})">Edit</button>
+                <button onclick="deleteTodo(${todo.id})">Delete</button>
+              </td>
+            `;
           });
         } catch (error) {
           console.error("Failed to fetch todos: " + error);
