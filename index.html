@@ -15,18 +15,56 @@
       <button type="submit">Add Todo</button>
     </form>
 
+    <h2>Todos List</h2>
+    <table id="todosTable">
+      <tr>
+        <th>ID</th>
+        <th>Title</th>
+        <th>Description</th>
+        <th>Completed</th>
+      </tr>
+    </table>
+
     <script>
-      document
-        .getElementById("todoForm")
-        .addEventListener("submit", function (event) {
-          event.preventDefault();
+      async function fetchTodos() {
+        try {
+          const response = await fetch("http://localhost:8080/select-all");
+          const todos = await response.json();
 
-          const formData = new FormData(event.target);
-          const title = formData.get("title");
-          const description = formData.get("description");
-          const completed = formData.get("completed") === "on";
+          const table = document.getElementById("todosTable");
+          table.innerHTML = `
+            <tr>
+              <th>ID</th>
+              <th>Title</th>
+              <th>Description</th>
+              <th>Completed</th>
+            </tr>
+          `;
+          todos.forEach((todo) => {
+            table.innerHTML += `
+              <tr>
+                <td>${todo.id}</td>
+                <td>${todo.title}</td>
+                <td>${todo.description}</td>
+                <td>${todo.completed ? "Yes" : "No"}</td>
+              </tr>
+            `;
+          });
+        } catch (error) {
+          console.error("Failed to fetch todos: " + error);
+        }
+      }
 
-          fetch("http://localhost:8080/insert", {
+      async function handleFormSubmit(event) {
+        event.preventDefault();
+
+        const formData = new FormData(event.target);
+        const title = formData.get("title");
+        const description = formData.get("description");
+        const completed = formData.get("completed") === "on";
+
+        try {
+          const response = await fetch("http://localhost:8080/insert", {
             method: "POST",
             headers: {
               "Content-Type": "application/x-www-form-urlencoded",
@@ -36,15 +74,21 @@
             )}&description=${encodeURIComponent(
               description
             )}&completed=${completed}`,
-          })
-            .then((response) => response.text())
-            .then((message) => {
-              alert(message);
-            })
-            .catch((error) => {
-              alert("Failed to add todo: " + error);
-            });
-        });
+          });
+          const message = await response.text();
+          alert(message);
+          fetchTodos(); // Fetch and display todos after adding a new one
+        } catch (error) {
+          alert("Failed to add todo: " + error);
+        }
+      }
+
+      document
+        .getElementById("todoForm")
+        .addEventListener("submit", handleFormSubmit);
+
+      // Call fetchTodos initially to display existing todos
+      fetchTodos();
     </script>
   </body>
 </html>
