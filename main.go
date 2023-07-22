@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
+	"strconv"
 
 	_ "github.com/lib/pq"
 )
@@ -105,7 +107,7 @@ func selectAllHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer db.Close()
 
-	rows, err := db.Query("SELECT id, description, completed FROM todos")
+	rows, err := db.Query("SELECT id, description, completed FROM todos ORDER BY id")
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to execute query: %s", err), http.StatusInternalServerError)
 		return
@@ -134,16 +136,38 @@ func selectAllHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func updateHandler(w http.ResponseWriter, r *http.Request) {
-	// Parse the form data (assumes application/x-www-form-urlencoded or application/json)
-	err := r.ParseForm()
+	// Extract the todo ID from the URL path
+	// The "/update/" part of the path will be trimmed, and the remaining part will be the todo ID
+	idStr := strings.TrimPrefix(r.URL.Path, "/update/")
+
+	// Check if the ID is empty
+	if idStr == "" {
+		http.Error(w, "Todo ID is missing", http.StatusBadRequest)
+		return
+	}
+
+	// Convert the todo ID string to an integer
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid Todo ID", http.StatusBadRequest)
+		return
+	}
+
+	// Parse the form data
+	err = r.ParseMultipartForm(10 << 20) // Set the maximum memory to 10 MB (adjust according to your needs)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to parse form: %s", err), http.StatusInternalServerError)
 		return
 	}
 
-	id := r.FormValue("id")
 	description := r.FormValue("description")
-	completed := r.FormValue("completed") == "true" // Assuming the value is submitted as "true" or "false"
+	completedStr := r.FormValue("completed") // Get the "completed" value as a string
+
+	completed, err := strconv.ParseBool(completedStr) // Convert the string to a boolean
+	if err != nil {
+		http.Error(w, "Invalid completed value", http.StatusBadRequest)
+		return
+	}
 
 	db, err := sql.Open("postgres", "postgres://postgres:postgres@db:5432/mydb?sslmode=disable")
 	if err != nil {
@@ -167,6 +191,7 @@ func updateHandler(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Fprint(w, "Updated record successfully!")
 }
+  
 
 func deleteHandler(w http.ResponseWriter, r *http.Request) {
 	// Parse the form data (assumes application/x-www-form-urlencoded or application/json)
@@ -292,7 +317,7 @@ func main() {
 	http.HandleFunc("/setup", corsMiddleware(setupHandler))
 	http.HandleFunc("/insert", corsMiddleware(insertHandler))
 	http.HandleFunc("/select-all", corsMiddleware(selectAllHandler))
-	http.HandleFunc("/update", corsMiddleware(updateHandler))
+	http.HandleFunc("/update/", corsMiddleware(updateHandler))
 	http.HandleFunc("/delete", corsMiddleware(deleteHandler))
 	http.HandleFunc("/bulk-delete", corsMiddleware(bulkDeleteHandler))
 

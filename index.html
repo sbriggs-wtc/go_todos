@@ -119,24 +119,94 @@
 
           todos.reverse().forEach((todo) => {
             const row = table.insertRow(0);
+
+            // Assign unique IDs to the HTML elements
             row.innerHTML = `
-              <td><input type="checkbox" class="todoCheckbox" data-id="${
-                todo.id
-              }" /></td>
-              <td><input type="text" value="${
-                todo.description
-              }" readonly /></td>
-              <td><input type="checkbox" ${
-                todo.completed ? "checked" : ""
-              } disabled /></td>
-              <td>
-                <button onclick="updateTodo(${todo.id})">Edit</button>
-                <button onclick="deleteTodo(${todo.id})">Delete</button>
-              </td>
-            `;
+        <td><input type="checkbox" class="todoCheckbox" data-id="${
+          todo.id
+        }" /></td>
+        <td><input type="text" value="${
+          todo.description
+        }" readonly id="description_${todo.id}" /></td>
+        <td><input type="checkbox" ${
+          todo.completed ? "checked" : ""
+        } disabled id="completed_${todo.id}" /></td>
+        <td>
+          <button onclick="editTodo(${todo.id})" id="editButton_${
+              todo.id
+            }">Edit</button>
+          <button onclick="deleteTodo(${todo.id})" id="deleteButton_${
+              todo.id
+            }">Delete</button>
+          <button style="display: none;" onclick="saveTodo(${
+            todo.id
+          })" id="saveButton_${todo.id}">Save</button>
+        </td>
+      `;
           });
         } catch (error) {
           console.error("Failed to fetch todos: " + error);
+        }
+      }
+
+      function editTodo(id) {
+        const descriptionInput = document.getElementById(`description_${id}`);
+        const completedInput = document.getElementById(`completed_${id}`);
+        const editButton = document.getElementById(`editButton_${id}`);
+        const deleteButton = document.getElementById(`deleteButton_${id}`);
+        const saveButton = document.getElementById(`saveButton_${id}`);
+
+        descriptionInput.readOnly = false;
+        completedInput.disabled = false;
+
+        editButton.style.display = "none";
+        deleteButton.style.display = "none";
+        saveButton.style.display = "inline";
+      }
+
+      async function saveTodo(id) {
+        console.log(id);
+        const descriptionInput = document.getElementById(`description_${id}`);
+        const completedInput = document.getElementById(`completed_${id}`);
+        const editButton = document.getElementById(`editButton_${id}`);
+        const deleteButton = document.getElementById(`deleteButton_${id}`);
+        const saveButton = document.getElementById(`saveButton_${id}`);
+
+        const description = descriptionInput.value;
+        const completed = completedInput.checked;
+
+        // Create a new FormData object and append the data
+        const formData = new FormData();
+        formData.append("description", description);
+        formData.append("completed", completed);
+
+        // Perform the update request to the server with the new data
+        try {
+          const response = await fetch(`http://localhost:8080/update/${id}`, {
+            method: "PUT",
+            body: formData, // Use FormData as the request body
+          });
+
+          if (!response.ok) {
+            throw new Error("Failed to update todo");
+          }
+
+          // Display a success message
+          document.getElementById("message").innerText =
+            "Todo updated successfully.";
+
+          // Revert the row to read-only mode
+          descriptionInput.readOnly = true;
+          completedInput.disabled = true;
+
+          editButton.style.display = "inline";
+          deleteButton.style.display = "inline";
+          saveButton.style.display = "none";
+
+          // After updating on the server-side, refresh the todo list
+          fetchTodos();
+        } catch (error) {
+          console.error("Failed to update todo: " + error);
         }
       }
 
@@ -160,11 +230,6 @@
         } catch (error) {
           console.error("Failed to add todo: " + error);
         }
-      }
-
-      async function updateTodo(id) {
-        // Implement the update functionality here
-        console.log("Update todo with ID:", id);
       }
 
       async function deleteTodo(id) {
