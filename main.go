@@ -325,3 +325,39 @@ func main() {
 	log.Println("Server started on :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
+
+// func main() {
+
+// 	log.Println("Server started on :8080")
+// 	log.Fatal(http.ListenAndServe(":8080", nil))
+
+// 	// Start HTTP server for pprof profiling (choose any available port)
+// 	go func() {
+// 		log.Println(http.ListenAndServe(":6060", nil))
+// 	}()
+
+
+// 	http.HandleFunc("/", corsMiddleware(helloHandler))
+// 	http.HandleFunc("/setup", corsMiddleware(setupHandler))
+// 	http.HandleFunc("/insert", corsMiddleware(insertHandler))
+// 	http.HandleFunc("/select-all", corsMiddleware(selectAllHandler))
+// 	http.HandleFunc("/update/", corsMiddleware(updateHandler))
+// 	http.HandleFunc("/delete", corsMiddleware(deleteHandler))
+// 	http.HandleFunc("/bulk-delete", corsMiddleware(bulkDeleteHandler))
+
+
+
+// 	// Your application code here
+
+// 	// Collect memory profile
+// 	f, err := os.Create("memprofile")
+// 	if err != nil {
+// 		log.Fatal("could not create memory profile: ", err)
+// 	}
+// 	defer f.Close()
+
+// 	runtime.GC() // Run garbage collector to get accurate memory usage
+// 	if err := pprof.WriteHeapProfile(f); err != nil {
+// 		log.Fatal("could not write memory profile: ", err)
+// 	}
+// }
